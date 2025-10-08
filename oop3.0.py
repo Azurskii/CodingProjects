@@ -1,0 +1,383 @@
+from datetime import datetime  # For handling dates like birth_date and death_date.
+from collections import defaultdict  # For grouping items by keys, used in birthdays_calendar.
+
+class Person:
+    """
+    Base class representing a person in the family tree.
+    """
+
+    def __init__(self, name, birth_date, death_date=None):
+        # Initialize a Person with name, birth date, and an optional death date.
+        self.name = name  # String, the person's name.
+        self.birth_date = datetime.strptime(birth_date, "%Y-%m-%d")  # Parse birth_date string into a datetime object.
+        self.death_date = datetime.strptime(death_date, "%Y-%m-%d") if death_date else None  # Parse death_date if provided.
+        self.parents = []  # List to store references to the person's parent objects.
+        self.spouses = []  # List to store references to the person's spouse objects.
+        self.children = []  # List to store references to the person's child objects.
+
+    def age(self):
+        """
+        Calculate the current age or age at death.
+        """
+        if self.death_date:  # Check if the person is deceased.
+            return (self.death_date - self.birth_date).days // 365  # Calculate age at death in years.
+        today = datetime.today()  # Use today's date for living persons.
+        return (today - self.birth_date).days // 365  # Calculate current age in years.
+
+    def is_alive(self):
+        """
+        Check if the person is alive.
+        """
+        return self.death_date is None  # Returns True if the person has no death_date.
+
+
+class LivingPerson(Person):
+    """
+    Subclass for a living person.
+    """
+
+    def __init__(self, name, birth_date):
+        # Initialize a living person by inheriting from Person.
+        super().__init__(name, birth_date)  # Only the birth_date is required for a living person.
+
+
+class DeceasedPerson(Person):
+    """
+    Subclass for a deceased person.
+    """
+
+    def __init__(self, name, birth_date, death_date):
+        # Initialize a deceased person by inheriting from Person and adding death_date.
+        super().__init__(name, birth_date, death_date)
+
+
+class FamilyTree:
+    """
+    Class to manage the family tree and operations.
+    """
+
+    def __init__(self):
+        # Initialize the FamilyTree with an empty dictionary to store members.
+        self.members = {}  # Dictionary with names as keys and Person objects as values.
+
+    def add_person(self, person):
+        """
+        Add a person to the family tree.
+        """
+        if person.name in self.members:  # Check if the person already exists in the tree.
+            raise ValueError(f"Person {person.name} already exists in the tree.")  # Raise an error for duplicates.
+        self.members[person.name] = person  # Add the person to the members dictionary.
+
+    def add_relationship(self, parent_name, child_name):
+        """
+        Create a parent-child relationship.
+        """
+        parent = self.members.get(parent_name)  # Look up the parent by name
+        child = self.members.get(child_name)  # Look up the child by name
+        if not parent or not child:  # Ensure both parent and child exist in the tree
+            raise ValueError("Both parent and child must exist in the tree.")  # Raise an error if either is missing
+        parent.children.append(child)  # Add the child to the parent's children list
+        child.parents.append(parent)  # Add the parent to the child's parents list
+
+    def find_parents(self, name):
+        """
+        Find and return the parents of a person.
+        """
+        person = self.members.get(name)
+        return [parent.name for parent in person.parents] if person else []
+
+    def find_grandparents(self, name):
+        """
+        Find and return the grandparents of a person.
+        """
+        grandparents = []
+        for parent_name in self.find_parents(name):
+            grandparents.extend(self.find_parents(parent_name))
+        return grandparents
+
+    def find_siblings(self, name):
+        """
+        Find and return the siblings of a person.
+        If no siblings exist, return a message indicating so.
+        """
+        person = self.members.get(name)  # Get the person object
+        if person and person.parents:  # Check if the person has parents
+            siblings = set()  # Use a set to store siblings (avoids duplicates)
+            for parent in person.parents:  # Loop through parents
+                siblings.update([child.name for child in parent.children if
+                                 child.name != name])  # Add siblings (exclude the person)
+            if siblings:
+                return list(siblings)  # Convert the set to a list and return
+        return "Doesn't have any siblings"  # Return this message if no siblings exist
+
+    def find_cousins(self, name):
+        """
+        Find and return the cousins of a person.
+        """
+        cousins = set()  # Use a set to store cousins (avoids duplicates)
+        for parent_name in self.find_parents(name):  # Iterate through the person's parents
+            aunts_uncles = self.find_siblings(parent_name)  # Get the siblings of each parent
+            for aunt_uncle in aunts_uncles:  # Loop through each aunt/uncle
+                cousins.update(
+                    [child.name for child in self.members[aunt_uncle].children])  # Add their children (cousins)
+        return list(cousins)  # Convert the set to a list and return
+
+    def find_grandchildren(self, name):
+        """
+        Find and return the grandchildren of a person.
+        """
+        grandchildren = []        # Initialize an empty list for grandchildren
+        person = self.members.get(name)        # Get the person object
+        if person:
+            for child in person.children:           # Loop through the person's children
+                grandchildren.extend([grandchild.name for grandchild in child.children])       # Add the grandchildren
+        return grandchildren        # Return the list of grandchildren
+
+    def find_extended_family(self, name):
+        """
+        Find and return the extended family of a person.
+        """
+        person = self.members.get(name)       # Get the person object
+        if not person:      # Check if the person exists
+            return {}         # Return an empty dictionary if the person is not found
+
+
+        family = {
+            "parents": self.find_parents(name),  # Find parents
+            "siblings": self.find_siblings(name),  # Find siblings
+            "spouse": [spouse.name for spouse in person.spouses],  # List spouse(s)
+            "children": [child.name for child in person.children],  # List children
+            "cousins": self.find_cousins(name),  # Find cousins
+            "grandchildren": self.find_grandchildren(name),  # Find grandchildren
+        }
+        return family      # Return the extended family dictionary
+
+    def birthdays_calendar(self):
+        """
+        Return a sorted list of birthdays in UK date format and group common birthdays.
+        """
+        birthdays = defaultdict(list)  # Dictionary to store birthdays grouped by date
+        for person in self.members.values():  # Iterate through all members
+            date_str = person.birth_date.strftime("%d/%m")  # Format the birth date as DD/MM
+            birthdays[date_str].append(person.name)  # Add the person's name to the appropriate date group
+        return dict(sorted(birthdays.items()))  # Sort the dictionary by date and return
+
+    def average_age(self):
+        """
+        Calculate the average age of all family members and provide life expectancy.
+        """
+        ages = [member.age() for member in self.members.values()]
+        if not ages:           # Check if the list is empty
+            return 0           # Return 0 if there are no ages
+        average = sum(ages) / len(ages)
+        return f"The average age is {average:.2f} years. This indicates the life expectancy of the family tree."
+
+    def number_of_children(self):
+        """
+        Find the number of children for each individual as a list.
+        """
+        return {name: [child.name for child in person.children] for name, person in self.members.items()}
+        # Map each person to their children's names
+    def average_children(self):
+        """
+        Calculate the average number of children per person.
+        """
+        children_counts = [len(person.children) for person in self.members.values()]         # Count children for each person
+        return sum(children_counts) / len(children_counts) if children_counts else 0         # Calculate and return the average
+
+
+# Updated Data Integration for Cornelia and Otto's Families
+def setup_family_tree():
+    tree = FamilyTree()
+
+    # Cornelia and Otto's Children
+    tree.add_person(LivingPerson("Elisa Emmersohn", "2008-05-10"))
+    tree.add_person(LivingPerson("Lukas Emmersohn", "2012-09-20"))
+
+    # Otto Emmersohn and Spouse
+    tree.add_person(LivingPerson("Otto Emmersohn", "1978-07-22"))
+    tree.add_person(LivingPerson("Sophia Muller", "1985-07-15"))  # Otto's spouse (after Cornelia)
+    tree.add_person(DeceasedPerson("Cornelia Emmersohn", "1980-03-15", "2050-06-10"))  # Otto's first spouse
+
+    # Link Cornelia and Otto as spouses
+    tree.members["Otto Emmersohn"].spouses.append(tree.members["Cornelia Emmersohn"])
+    tree.members["Cornelia Emmersohn"].spouses.append(tree.members["Otto Emmersohn"])
+
+    # Cornelia's Parents (Indian/Asian Roots)
+    tree.add_person(DeceasedPerson("Arjun Patel", "1920-05-12", "1980-06-25"))  # Cornelia's father
+    tree.add_person(DeceasedPerson("Meera Patel", "1925-09-11", "1995-01-01"))  # Cornelia's mother
+
+    # Cornelia's Siblings
+    tree.add_person(LivingPerson("Ramesh Patel", "1975-02-01"))
+    tree.add_person(DeceasedPerson("Anita Patel", "1978-05-20", "2030-11-10"))
+
+    # Cornelia's Cousins
+    tree.add_person(LivingPerson("Deepak Patel", "1983-08-15"))  # Cousin through Arjun Patel's sibling
+    tree.add_person(DeceasedPerson("Maya Iyer", "1985-07-12", "2025-04-05"))  # Cousin through Meera Patel's sibling
+
+    # Arjun Patel's Parents
+    tree.add_person(DeceasedPerson("Krishna Iyer", "1915-11-05", "1975-04-20"))  # Arjun's father
+    tree.add_person(DeceasedPerson("Asha Iyer", "1918-06-18", "1985-07-22"))  # Arjun's mother
+
+    # Meera Patel's Parents
+    tree.add_person(DeceasedPerson("Vijay Iyer", "1940-03-10", "2015-09-30"))  # Meera's father
+    tree.add_person(DeceasedPerson("Sita Sharma", "1943-01-19", "2005-06-12"))  # Meera's mother
+
+    # Cornelia's Grandparents' Siblings
+    tree.add_person(DeceasedPerson("Manoj Sharma", "1905-07-07", "1970-11-01"))  # Meera's uncle
+
+    # Otto's Parents (European Roots)
+    tree.add_person(DeceasedPerson("Hans Bauer", "1940-05-12", "2010-10-12"))  # Otto's father
+    tree.add_person(DeceasedPerson("Marta Bauer", "1945-04-20", "2020-03-01"))  # Otto's mother
+
+    # Otto's Sibling
+    tree.add_person(LivingPerson("Greta Bauer", "1980-09-15"))
+
+    # Otto's Cousin
+    tree.add_person(LivingPerson("Max Muller", "1985-05-22"))
+
+    # Otto's Grandparents
+    tree.add_person(DeceasedPerson("Karl Emmersohn", "1920-05-15", "1985-03-10"))  # Hans' father
+    tree.add_person(DeceasedPerson("Greta Emmersohn", "1925-11-18", "1992-08-25"))  # Hans' mother
+    tree.add_person(DeceasedPerson("Johann Schmidt", "1910-02-17", "1978-07-30"))  # Marta's father
+    tree.add_person(DeceasedPerson("Helga Schmidt", "1913-09-04", "1983-05-16"))  # Marta's mother
+
+    # Otto's Grandparents' Siblings
+    tree.add_person(DeceasedPerson("Heinrich Muller", "1935-06-14", "2005-11-11"))  # Greta's sibling
+    tree.add_person(DeceasedPerson("Ingrid Muller", "1937-01-21", "2000-08-22"))  # Greta's sibling
+    tree.add_person(DeceasedPerson("Alfred Fischer", "1900-08-29", "1965-04-14"))  # Johann's sibling
+
+    # Relationships
+    # Cornelia's Family
+    tree.add_relationship("Arjun Patel", "Cornelia Emmersohn")
+    tree.add_relationship("Meera Patel", "Cornelia Emmersohn")
+    tree.add_relationship("Arjun Patel", "Ramesh Patel")
+    tree.add_relationship("Meera Patel", "Ramesh Patel")
+    tree.add_relationship("Arjun Patel", "Anita Patel")
+    tree.add_relationship("Meera Patel", "Anita Patel")
+    tree.add_relationship("Krishna Iyer", "Arjun Patel")
+    tree.add_relationship("Asha Iyer", "Arjun Patel")
+    tree.add_relationship("Vijay Iyer", "Meera Patel")
+    tree.add_relationship("Sita Sharma", "Meera Patel")
+    tree.add_relationship("Krishna Iyer", "Deepak Patel")
+    tree.add_relationship("Asha Iyer", "Deepak Patel")
+    tree.add_relationship("Vijay Iyer", "Maya Iyer")
+    tree.add_relationship("Sita Sharma", "Maya Iyer")
+
+    # Otto's Family
+    tree.add_relationship("Hans Bauer", "Otto Emmersohn")
+    tree.add_relationship("Marta Bauer", "Otto Emmersohn")
+    tree.add_relationship("Hans Bauer", "Greta Bauer")
+    tree.add_relationship("Marta Bauer", "Greta Bauer")
+    tree.add_relationship("Karl Emmersohn", "Hans Bauer")
+    tree.add_relationship("Greta Emmersohn", "Hans Bauer")
+    tree.add_relationship("Johann Schmidt", "Marta Bauer")
+    tree.add_relationship("Helga Schmidt", "Marta Bauer")
+    tree.add_relationship("Greta Emmersohn", "Heinrich Muller")
+    tree.add_relationship("Greta Emmersohn", "Ingrid Muller")
+    tree.add_relationship("Johann Schmidt", "Alfred Fischer")
+    tree.add_relationship("Heinrich Muller", "Max Muller")
+    tree.add_relationship("Ingrid Muller", "Max Muller")
+
+    # Children of Cornelia and Otto
+    tree.add_relationship("Cornelia Emmersohn", "Elisa Emmersohn")
+    tree.add_relationship("Otto Emmersohn", "Elisa Emmersohn")
+    tree.add_relationship("Cornelia Emmersohn", "Lukas Emmersohn")
+    tree.add_relationship("Otto Emmersohn", "Lukas Emmersohn")
+
+    return tree             # Return the constructed family tree
+
+
+def normalize_name(family_tree, name):
+    """
+    Normalize the name for case-insensitive matching.
+    """
+    name_lower = name.lower()                      # Convert the input name to lowercase
+    for member_name in family_tree.members.keys():       # Iterate through all member names
+
+        if member_name.lower() == name_lower:      # Match the name case-insensitively
+            return member_name        # Return the normalized name
+    return None         # Return None if no match is found
+
+
+def main():
+    family_tree = setup_family_tree()              # Create and setup the family tree
+
+    options = {
+        1: "Find Parents",
+        2: "Find Grandparents",
+        3: "Find Siblings",
+        4: "Find Cousins",
+        5: "Find Immediate Family",
+        6: "Find Extended Family",
+        7: "Find Grandchildren",
+        8: "Average Age",
+        9: "Number of Children",
+        10: "Average Number of Children",
+        11: "Birthdays Calendar",
+    }
+
+    while True:                               # Keep the program running until the user chooses to exit
+        print("\nChoose an option:")
+        for key, value in options.items():       # Print the available options
+
+            print(f"{key}: {value}")
+        print("0: Exit")
+
+        try:
+            choice = int(input("\nEnter your choice (0-11): "))           # Get the user's choice
+        except ValueError:
+            print("Invalid input. Please enter a valid number.")         # Handle invalid input
+            continue
+
+        if choice == 0:            # Exit the program
+            print("Exiting Family Tree System.")
+            break
+
+        if choice in options:              # Validate the user's choice
+            person_name = None
+            if choice in {1, 2, 3, 4, 5, 6, 7}:         # For these options, a name is required
+                person_name_input = input("Enter the name of the person: ").strip()      # Normalize the name
+                person_name = normalize_name(family_tree, person_name_input)
+                if not person_name:       # Handle invalid names
+                    print(f"No person found with the name '{person_name_input}'. Please try again.")
+                    continue
+
+            if choice == 1:
+                print(f"Parents of {person_name}: {family_tree.find_parents(person_name)}")
+            elif choice == 2:
+                print(f"Grandparents of {person_name}: {family_tree.find_grandparents(person_name)}")
+            elif choice == 3:
+                siblings = family_tree.find_siblings(person_name)
+                if isinstance(siblings, str):  # Handle the "Doesn't have any siblings" case
+                    print(f"{person_name} {siblings}")
+                else:
+                    print(f"Siblings of {person_name}: {siblings}")
+            elif choice == 4:
+                print(f"Cousins of {person_name}: {family_tree.find_cousins(person_name)}")
+            elif choice == 5:
+                print(f"Immediate Family of {person_name}: {family_tree.find_extended_family(person_name)}")
+            elif choice == 6:
+                print(f"Extended Family of {person_name}: {family_tree.find_extended_family(person_name)}")
+            elif choice == 7:
+                print(f"Grandchildren of {person_name}: {family_tree.find_grandchildren(person_name)}")
+            elif choice == 8:
+                print(family_tree.average_age())
+            elif choice == 9:
+                print("\nNumber of Children for Each Individual:")
+                children_data = family_tree.number_of_children()
+                for parent, children in children_data.items():
+                    print(f"{parent}: {', '.join(children) if children else 'No children'}")
+            elif choice == 10:
+                print(f"Average Number of Children: {family_tree.average_children():.2f}")
+            elif choice == 11:
+                birthdays = family_tree.birthdays_calendar()
+                print("\nBirthdays Calendar:")
+                for date, names in birthdays.items():
+                    print(f"{date}: {', '.join(names)}")
+        else:
+            print("Invalid choice. Please try again.")            # Handle invalid choices
+
+
+if __name__ == "__main__":
+    main()                        #Run the program
