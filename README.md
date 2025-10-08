@@ -1,0 +1,1 @@
+An OOP Python project for modeling and analyzing a family tree. It finds all relationships (parents, cousins, etc.), calculates demographic statistics (age, children count), and provides a birthdays calendar via a command-line interface.
